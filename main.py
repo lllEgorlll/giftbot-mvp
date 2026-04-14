@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -7,6 +7,7 @@ from datetime import datetime
 
 app = FastAPI(title="GiftBot API")
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,6 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# База данных
 DATABASE_URL = "sqlite:///./giftbot.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -34,6 +36,7 @@ class GiftRequest(Base):
 
 Base.metadata.create_all(bind=engine)
 
+# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -41,17 +44,32 @@ def get_db():
     finally:
         db.close()
 
+# Эндпоинты
 @app.post("/gift-requests")
-def create_request(request: dict, db: Session = None):
+def create_request(request: dict, db: Session = Depends(get_db)):
     db_request = GiftRequest(**request)
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
-    return db_request
+    return {"id": db_request.id, "message": "Запрос сохранён"}
 
 @app.get("/gift-requests")
-def get_requests(db: Session = None):
-    return db.query(GiftRequest).order_by(GiftRequest.created_at.desc()).all()
+def get_requests(db: Session = Depends(get_db)):
+    requests = db.query(GiftRequest).order_by(GiftRequest.created_at.desc()).all()
+    return [
+        {
+            "id": r.id,
+            "created_at": r.created_at.isoformat(),
+            "gender": r.gender,
+            "age": r.age,
+            "occasion": r.occasion,
+            "budget": r.budget,
+            "closeness": r.closeness,
+            "interests": r.interests,
+            "selected_gift": r.selected_gift
+        }
+        for r in requests
+    ]
 
 @app.get("/")
 def root():
