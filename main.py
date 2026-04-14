@@ -7,7 +7,6 @@ from datetime import datetime
 
 app = FastAPI(title="GiftBot API")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# База данных
 DATABASE_URL = "sqlite:///./giftbot.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -36,7 +34,6 @@ class GiftRequest(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -44,7 +41,6 @@ def get_db():
     finally:
         db.close()
 
-# Эндпоинты
 @app.post("/gift-requests")
 def create_request(request: dict, db: Session = Depends(get_db)):
     db_request = GiftRequest(**request)
@@ -70,6 +66,23 @@ def get_requests(db: Session = Depends(get_db)):
         }
         for r in requests
     ]
+
+# ← НОВОЕ: УДАЛЕНИЕ ОДНОЙ ЗАПИСИ
+@app.delete("/gift-requests/{request_id}")
+def delete_request(request_id: int, db: Session = Depends(get_db)):
+    request = db.query(GiftRequest).filter(GiftRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Запись не найдена")
+    db.delete(request)
+    db.commit()
+    return {"message": f"Запись {request_id} успешно удалена"}
+
+# ← НОВОЕ: ОЧИСТИТЬ ВСЮ ТАБЛИЦУ (если хочешь удалить всё сразу)
+@app.delete("/gift-requests")
+def delete_all_requests(db: Session = Depends(get_db)):
+    db.query(GiftRequest).delete()
+    db.commit()
+    return {"message": "Все записи удалены"}
 
 @app.get("/")
 def root():
