@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GiftBot — Подбор подарков с ИИ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        .page { display: none; }
+        .page.active { display: block; }
+        .card-hover:hover { transform: scale(1.05); transition: all 0.3s; }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+
+<nav class="bg-black text-white sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-gift text-3xl"></i>
+            <span class="text-2xl font-bold">GiftBot</span>
+        </div>
+        <div class="flex gap-8 text-sm font-medium">
+            <a onclick="switchPage('home')" class="hover:text-purple-400 cursor-pointer">Главная</a>
+            <a onclick="switchPage('form')" class="hover:text-purple-400 cursor-pointer">Новый подбор</a>
+            <a onclick="switchPage('requests')" class="hover:text-purple-400 cursor-pointer">Мои запросы</a>
+            <a onclick="switchPage('how')" class="hover:text-purple-400 cursor-pointer">Как это работает</a>
+        </div>
+    </div>
+</nav>
+
+<!-- HOME -->
+<div id="home" class="page active max-w-5xl mx-auto px-6 py-20 text-center">
+    <h1 class="text-6xl font-bold text-gray-900 mb-6">Найди идеальный подарок<br>за 60 секунд</h1>
+    <p class="text-2xl text-gray-600 mb-10">ИИ-ассистент, который знает, что понравится твоему близкому человеку</p>
+    <button onclick="switchPage('form')" class="bg-black text-white px-10 py-5 rounded-2xl text-xl font-semibold hover:bg-purple-600">Начать подбор подарка →</button>
+</div>
+
+<!-- FORM -->
+<div id="form" class="page max-w-2xl mx-auto px-6 py-12">
+    <h2 class="text-4xl font-bold mb-8 text-center">Расскажите о получателе</h2>
+    <form id="giftForm" class="space-y-8">
+        <div class="grid grid-cols-2 gap-6">
+            <div><label class="block text-sm font-medium mb-2">Пол</label>
+                <select id="gender" class="w-full p-4 border rounded-2xl" required><option value="Мужской">Мужской</option><option value="Женский">Женский</option></select>
+            </div>
+            <div><label class="block text-sm font-medium mb-2">Возраст</label>
+                <input type="number" id="age" class="w-full p-4 border rounded-2xl" placeholder="28" required>
+            </div>
+        </div>
+        <div><label class="block text-sm font-medium mb-2">Повод</label>
+            <input type="text" id="occasion" class="w-full p-4 border rounded-2xl" placeholder="День рождения" required>
+        </div>
+        <div><label class="block text-sm font-medium mb-2">Бюджет (руб.)</label>
+            <input type="number" id="budget" class="w-full p-4 border rounded-2xl" placeholder="5000" required>
+        </div>
+        <div><label class="block text-sm font-medium mb-2">Степень близости</label>
+            <select id="closeness" class="w-full p-4 border rounded-2xl" required>
+                <option value="Коллега">Коллега</option><option value="Друг">Друг</option><option value="Партнёр">Партнёр</option><option value="Родственник">Родственник</option>
+            </select>
+        </div>
+        <div><label class="block text-sm font-medium mb-2">Интересы / хобби</label>
+            <textarea id="interests" rows="3" class="w-full p-4 border rounded-2xl" placeholder="Спорт, книги, гаджеты..."></textarea>
+        </div>
+        <button type="submit" class="w-full bg-black text-white py-6 rounded-3xl text-xl font-semibold hover:bg-purple-600">Сохранить в базу и получить рекомендации →</button>
+    </form>
+</div>
+
+<!-- RECOMMENDATIONS -->
+<div id="recommendations" class="page max-w-6xl mx-auto px-6 py-12">
+    <div class="flex justify-between mb-8">
+        <h2 class="text-4xl font-bold">Рекомендации</h2>
+        <button onclick="switchPage('form')" class="text-purple-600">← Новый запрос</button>
+    </div>
+    <div id="recGrid" class="grid grid-cols-3 gap-6"></div>
+</div>
+
+<!-- REQUESTS (главная таблица) -->
+<div id="requests" class="page max-w-6xl mx-auto px-6 py-12">
+    <h2 class="text-4xl font-bold mb-8">Мои запросы (из базы данных SQLite)</h2>
+    <table class="w-full bg-white rounded-3xl shadow-xl overflow-hidden">
+        <thead class="bg-black text-white">
+            <tr><th class="py-6 px-8 text-left">Дата</th><th class="py-6 px-8 text-left">Получатель</th><th class="py-6 px-8 text-left">Повод</th><th class="py-6 px-8 text-left">Бюджет</th></tr>
+        </thead>
+        <tbody id="requestsTable" class="text-gray-700"></tbody>
+    </table>
+</div>
+
+<script>
+    const API_URL = "http://127.0.0.1:8000";
+
+    function switchPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        if (pageId === 'requests') renderRequests();
+    }
+
+    function generateRecommendations(data) {
+        return [
+            {id:1, name:"Смарт-часы", price:"4990 ₽", why:"Подходит под возраст " + data.age},
+            {id:2, name:"Книга по интересам", price:"1290 ₽", why:"Учитывает хобби"},
+            {id:3, name:"Набор для хобби", price:"3490 ₽", why:"Оригинальный подарок"}
+        ];
+    }
+
+    function renderRecommendations() {
+        const grid = document.getElementById('recGrid');
+        grid.innerHTML = generateRecommendations({age: document.getElementById('age').value}).map(g => `
+            <div class="card-hover bg-white rounded-3xl p-6 shadow-xl">
+                <div class="h-48 bg-gray-200 rounded-2xl flex items-center justify-center text-7xl mb-4">🎁</div>
+                <h3 class="text-2xl font-bold">${g.name}</h3>
+                <p class="text-3xl text-purple-600 font-bold">${g.price}</p>
+                <p class="text-gray-600 mt-4">${g.why}</p>
+            </div>
+        `).join('');
+    }
+
+    document.getElementById('giftForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = {
+            gender: document.getElementById('gender').value,
+            age: parseInt(document.getElementById('age').value),
+            occasion: document.getElementById('occasion').value,
+            budget: parseInt(document.getElementById('budget').value),
+            closeness: document.getElementById('closeness').value,
+            interests: document.getElementById('interests').value || ""
+        };
+
+        const res = await fetch(`${API_URL}/gift-requests`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData)
+        });
+
+        if (res.ok) {
+            alert("✅ Запись успешно сохранена в базу данных!");
+            currentRecommendations = generateRecommendations(formData);
+            renderRecommendations();
+            switchPage('requests');        // ← автоматически переключаемся на таблицу
+        } else {
+            alert("Ошибка при сохранении");
+        }
+    });
+
+    async function renderRequests() {
+        try {
+            const res = await fetch(`${API_URL}/gift-requests`);
+            const data = await res.json();
+
+            const tbody = document.getElementById('requestsTable');
+            tbody.innerHTML = data.map(r => `
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-6 px-8">${new Date(r.created_at).toLocaleDateString('ru-RU')}</td>
+                    <td class="py-6 px-8">${r.gender}, ${r.age} лет</td>
+                    <td class="py-6 px-8">${r.occasion}</td>
+                    <td class="py-6 px-8">${r.budget} ₽</td>
+                </tr>
+            `).join('');
+
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-12 text-center text-gray-500">Пока нет записей</td></tr>`;
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Не удалось загрузить запросы. Убедись, что сервер main.py запущен.");
+        }
+    }
+
+    window.onload = () => console.log("%cGiftBot подключён к базе!", "color:#8b00ff;font-size:18px");
+</script>
+</body>
+</html>
