@@ -30,54 +30,67 @@ def send_to_bitrix24(lead_data: dict):
 
     url = f"{BITRIX24_WEBHOOK}crm.lead.add"
 
-    # Маппинг полей с проверками
-    gender_map = {"female": "Женский", "male": "Мужской"}
-    gender_bitrix = gender_map.get(lead_data.get("gender", ""), "")
-    print("1. Пол (исходный → битрикс):", lead_data.get("gender"), "→", gender_bitrix)
+    # Пол: поддерживаем и английские, и русские варианты
+    gender_raw = lead_data.get("gender", "")
+    if gender_raw in ("female", "Женский"):
+        gender_bitrix = "Женский"
+    elif gender_raw in ("male", "Мужской"):
+        gender_bitrix = "Мужской"
+    else:
+        gender_bitrix = gender_raw  # на всякий случай оставить как есть
+    print("1. Пол (исходный → битрикс):", gender_raw, "→", gender_bitrix)
 
+    # Повод: маппинг с учётом русских сокращений
+    occasion_raw = lead_data.get("occasion", "")
     occasion_map = {
         "birthday": "День рождения",
         "new_year": "Новый год",
         "march_8": "8 Марта",
-        "anniversary": "Годовщина"
+        "anniversary": "Годовщина",
+        "ДР": "День рождения",
+        "др": "День рождения",
+        "НГ": "Новый год",
+        "нг": "Новый год"
     }
-    raw_occasion = lead_data.get("occasion", "")
-    occasion_bitrix = occasion_map.get(raw_occasion, raw_occasion)
-    print("2. Повод (исходный → битрикс):", raw_occasion, "→", occasion_bitrix)
+    occasion_bitrix = occasion_map.get(occasion_raw, occasion_raw)
+    print("2. Повод (исходный → битрикс):", occasion_raw, "→", occasion_bitrix)
 
+    # Степень близости
+    closeness_raw = lead_data.get("closeness", "")
     closeness_map = {
         "close": "Близкий",
         "acquaintance": "Знакомый",
-        "colleague": "Коллега"
+        "colleague": "Коллега",
+        "Родственник": "Близкий",
+        "родственник": "Близкий"
     }
-    raw_closeness = lead_data.get("closeness", "")
-    closeness_bitrix = closeness_map.get(raw_closeness, raw_closeness)
-    print("3. Близость (исходный → битрикс):", raw_closeness, "→", closeness_bitrix)
+    closeness_bitrix = closeness_map.get(closeness_raw, closeness_raw)
+    print("3. Близость (исходный → битрикс):", closeness_raw, "→", closeness_bitrix)
 
+    # Возраст и бюджет – без изменений
     age_val = lead_data.get("age")
     try:
         age_int = int(age_val) if age_val is not None else 0
     except (ValueError, TypeError):
         age_int = 0
-    print("4. Возраст (исходный → int):", age_val, "→", age_int)
+    print("4. Возраст →", age_int)
 
     budget_val = lead_data.get("budget")
     try:
         budget_int = int(budget_val) if budget_val is not None else 0
     except (ValueError, TypeError):
         budget_int = 0
-    print("5. Бюджет (исходный → int):", budget_val, "→", budget_int)
+    print("5. Бюджет →", budget_int)
 
     interests_val = lead_data.get("interests", "")
-    print("6. Интересы (исходный):", interests_val)
+    print("6. Интересы:", interests_val)
 
-    # Формируем поля лида
+    # Формируем поля лида – коды полей оставляем как есть (они правильные)
     fields = {
-        "TITLE": f"GiftBot: {lead_data.get('gender', '')}, {lead_data.get('age', '')} лет",
-        "NAME": lead_data.get('name', f"Запрос от {lead_data.get('gender', '')} {lead_data.get('age', '')}"),
-        "COMMENTS": f"Повод: {raw_occasion}\nИнтересы: {interests_val}",
+        "TITLE": f"GiftBot: {gender_bitrix}, {age_int} лет",
+        "NAME": f"Запрос от {gender_bitrix} {age_int}",
+        "COMMENTS": f"Повод: {occasion_bitrix}\nИнтересы: {interests_val}",
 
-        # Кастомные поля – УБЕДИТЕСЬ, что символьные коды точно такие же, как в CRM!
         "UfCrm1778219345": gender_bitrix,
         "UfCrm1778219365": age_int,
         "UfCrm1778219376": occasion_bitrix,
@@ -86,7 +99,7 @@ def send_to_bitrix24(lead_data: dict):
         "UfCrm1778219437": interests_val
     }
 
-    print("\n--- Что отправляем в Bitrix24 (fields) ---")
+    print("\n--- Что отправляем в Bitrix24 ---")
     for k, v in fields.items():
         print(f"  {k}: {v!r}")
 
@@ -94,17 +107,17 @@ def send_to_bitrix24(lead_data: dict):
 
     try:
         response = requests.post(url, json=payload, timeout=10)
-        print("\n--- Ответ от Bitrix24 ---")
+        print("\n--- Ответ Bitrix24 ---")
         print(f"Статус: {response.status_code}")
-        print(f"Тело ответа: {response.text}")
+        print(f"Тело: {response.text}")
         response.raise_for_status()
         result = response.json()
         if result.get("result"):
-            print(f"✅ Лид создан в Битрикс24, ID: {result['result']}")
+            print(f"✅ Лид создан, ID: {result['result']}")
         else:
-            print(f"❌ Ошибка Битрикс24: {result}")
+            print(f"❌ Ошибка: {result}")
     except Exception as e:
-        print(f"❌ Ошибка при отправке в Битрикс24: {e}")
+        print(f"❌ Исключение: {e}")
     print("=== КОНЕЦ ОТЛАДКИ ===\n")
 
 # -----------------------------------------------
