@@ -25,11 +25,15 @@ BITRIX24_WEBHOOK = "https://b24-756tbi.bitrix24.ru/rest/1/1rkznb6559d2y6si/"
 # Функция отправки данных в Битрикс24 (лиды)
 # -----------------------------------------------
 def send_to_bitrix24(lead_data: dict):
+    print("\n=== ОТПРАВКА В BITRIX24 ===")
+    print("Полученные данные из формы:", lead_data)
+
     url = f"{BITRIX24_WEBHOOK}crm.lead.add"
 
-    # Маппинг полей формы → значения Битрикс24
+    # Маппинг полей с проверками
     gender_map = {"female": "Женский", "male": "Мужской"}
     gender_bitrix = gender_map.get(lead_data.get("gender", ""), "")
+    print("1. Пол (исходный → битрикс):", lead_data.get("gender"), "→", gender_bitrix)
 
     occasion_map = {
         "birthday": "День рождения",
@@ -37,34 +41,62 @@ def send_to_bitrix24(lead_data: dict):
         "march_8": "8 Марта",
         "anniversary": "Годовщина"
     }
-    occasion_bitrix = occasion_map.get(lead_data.get("occasion", ""), lead_data.get("occasion", ""))
+    raw_occasion = lead_data.get("occasion", "")
+    occasion_bitrix = occasion_map.get(raw_occasion, raw_occasion)
+    print("2. Повод (исходный → битрикс):", raw_occasion, "→", occasion_bitrix)
 
     closeness_map = {
         "close": "Близкий",
         "acquaintance": "Знакомый",
         "colleague": "Коллега"
     }
-    closeness_bitrix = closeness_map.get(lead_data.get("closeness", ""), lead_data.get("closeness", ""))
+    raw_closeness = lead_data.get("closeness", "")
+    closeness_bitrix = closeness_map.get(raw_closeness, raw_closeness)
+    print("3. Близость (исходный → битрикс):", raw_closeness, "→", closeness_bitrix)
+
+    age_val = lead_data.get("age")
+    try:
+        age_int = int(age_val) if age_val is not None else 0
+    except (ValueError, TypeError):
+        age_int = 0
+    print("4. Возраст (исходный → int):", age_val, "→", age_int)
+
+    budget_val = lead_data.get("budget")
+    try:
+        budget_int = int(budget_val) if budget_val is not None else 0
+    except (ValueError, TypeError):
+        budget_int = 0
+    print("5. Бюджет (исходный → int):", budget_val, "→", budget_int)
+
+    interests_val = lead_data.get("interests", "")
+    print("6. Интересы (исходный):", interests_val)
 
     # Формируем поля лида
     fields = {
         "TITLE": f"GiftBot: {lead_data.get('gender', '')}, {lead_data.get('age', '')} лет",
         "NAME": lead_data.get('name', f"Запрос от {lead_data.get('gender', '')} {lead_data.get('age', '')}"),
-        "COMMENTS": f"Повод: {lead_data.get('occasion', '')}\nИнтересы: {lead_data.get('interests', '')}",
+        "COMMENTS": f"Повод: {raw_occasion}\nИнтересы: {interests_val}",
 
-        # ↓↓↓ ВАШИ КОДЫ КАСТОМНЫХ ПОЛЕЙ (замените, если отличаются) ↓↓↓
-        "UfCrm1778219345": gender_bitrix,  # Пол получателя
-        "UfCrm1778219365": int(lead_data.get("age", 0)),  # Возраст
-        "UfCrm1778219376": occasion_bitrix,  # Повод
-        "UfCrm1778219390": int(lead_data.get("budget", 0)),  # Бюджет
-        "UfCrm1778219418": closeness_bitrix,  # Степень близости
-        "UfCrm1778219437": lead_data.get("interests", "")  # Интересы/хобби
+        # Кастомные поля – УБЕДИТЕСЬ, что символьные коды точно такие же, как в CRM!
+        "UfCrm1778219345": gender_bitrix,
+        "UfCrm1778219365": age_int,
+        "UfCrm1778219376": occasion_bitrix,
+        "UfCrm1778219390": budget_int,
+        "UfCrm1778219418": closeness_bitrix,
+        "UfCrm1778219437": interests_val
     }
+
+    print("\n--- Что отправляем в Bitrix24 (fields) ---")
+    for k, v in fields.items():
+        print(f"  {k}: {v!r}")
 
     payload = {"fields": fields}
 
     try:
         response = requests.post(url, json=payload, timeout=10)
+        print("\n--- Ответ от Bitrix24 ---")
+        print(f"Статус: {response.status_code}")
+        print(f"Тело ответа: {response.text}")
         response.raise_for_status()
         result = response.json()
         if result.get("result"):
@@ -73,7 +105,7 @@ def send_to_bitrix24(lead_data: dict):
             print(f"❌ Ошибка Битрикс24: {result}")
     except Exception as e:
         print(f"❌ Ошибка при отправке в Битрикс24: {e}")
-
+    print("=== КОНЕЦ ОТЛАДКИ ===\n")
 
 # -----------------------------------------------
 # База данных SQLite (как было)
